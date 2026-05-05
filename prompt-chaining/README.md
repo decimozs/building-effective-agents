@@ -1,5 +1,7 @@
 # Prompt Chaining
 
+<img width="2401" height="1000" alt="image" src="https://github.com/user-attachments/assets/0d4fea4d-e879-4883-94f6-b4a0d26e006e" />
+
 ## What This Pattern Is
 Prompt chaining breaks one task into a sequence of smaller steps. Each step uses the output of the previous step.
 
