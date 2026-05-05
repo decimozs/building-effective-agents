@@ -19,16 +19,31 @@ llm = ChatOllama(model="lfm2.5-thinking", temperature=0)
 
 
 def generate_doucument_outline(state: State) -> dict:
+    """Create the first draft of the outline from the topic.
+
+    Prompt chaining works by splitting one hard task into small steps. The
+    first node establishes a rough draft that later nodes can refine.
+    """
     msg = llm.invoke(f"Write document outline about {state.get('topic')}")
     return {"document_outline": msg.content}
 
 
 def improve_doucument_outline(state: State) -> dict:
+    """Improve the draft outline before the final pass.
+
+    A chained workflow lets each step focus on a narrow transformation instead
+    of forcing one prompt to generate the final answer in a single shot.
+    """
     msg = llm.invoke(f"Improve this document outline: {state.get('document_outline')}")
     return {"improve_document_outline": msg.content}
 
 
 def final_document_outline(state: State) -> dict:
+    """Polish the improved outline into the final version.
+
+    This last step keeps the output clean and consistent after earlier nodes
+    have already done the heavy lifting.
+    """
     msg = llm.invoke(
         f"Polish this improve document outline: {state.get('improve_document_outline')}"
     )
@@ -36,6 +51,11 @@ def final_document_outline(state: State) -> dict:
 
 
 def check_document_outline(state: State) -> dict:
+    """Validate the outline before allowing the workflow to continue.
+
+    In BEA terms, this is a guardrail step: check quality early, then branch
+    only if the draft meets the intended criterion.
+    """
     msg = llm.invoke(
         f"Check this document outline: {state.get('document_outline')} "
         f"if the topic is for science, if it is return passed if not return fail."
@@ -46,6 +66,11 @@ def check_document_outline(state: State) -> dict:
 
 
 def route_document(state: State) -> str:
+    """Route based on the validation result.
+
+    This makes the workflow explicit for beginners: generate, verify, then
+    continue only when the draft satisfies the rule.
+    """
     document_status = state.get("document_status", "").lower()
     if "passed" in document_status:
         return "passed"
@@ -54,6 +79,7 @@ def route_document(state: State) -> str:
 
 workflow = StateGraph(State)
 
+# Small sequential steps keep the chain easy to inspect and improve.
 workflow.add_node("generate_doucument_outline", generate_doucument_outline)
 workflow.add_node("improve_document_outline", improve_doucument_outline)
 workflow.add_node("final_document_outline", final_document_outline)
@@ -66,6 +92,7 @@ workflow.add_conditional_edges(
     route_document,
     {"passed": "improve_document_outline", "fail": END},
 )
+# Stop after the final polish. No extra loops needed for this example.
 workflow.add_edge("improve_document_outline", "final_document_outline")
 workflow.add_edge("final_document_outline", END)
 

@@ -1,2 +1,38 @@
-# building-effective-agents
-Building effective agents by Anthropic
+# Building Effective Agents with LangGraph
+
+This repository is about building effective agents with LangGraph by exploring the core patterns from Anthropic's newsletter and seeing how they work in code.
+
+The goal is to understand how to design agent workflows that stay simple, clear, and reliable. Instead of putting everything into one large prompt, LangGraph lets each part of the agent do one job well and makes the full flow easier to follow.
+
+This project covers patterns like:
+- prompt chaining
+- routing
+- parallelization
+- orchestrator-workers
+- evaluator-optimizer
+- tool-using agents
+
+Each example shows a different way to structure agent behavior so the system becomes easier to control, debug, and improve.
+
+## Core Concepts
+
+A few educational ideas come up repeatedly in agent design:
+
+- **Single responsibility**: each node should do one job well instead of handling everything at once.
+- **Decomposition**: complex tasks become easier when you break them into smaller steps.
+- **Routing**: different inputs may need different paths, prompts, or tools.
+- **Parallelism**: independent subtasks can run at the same time to improve efficiency.
+- **Iteration**: some tasks improve through feedback loops instead of one pass.
+- **Tool use**: agents become more useful when they can act on the environment, not just generate text.
+- **Control flow visibility**: explicit graphs make agent behavior easier to debug and trust.
+
+These concepts are the foundation of building effective agents with LangGraph.
+
+## Reference
+
+Inspired by Anthropic's newsletter:
+
+**Engineering at Anthropic - Building effective agents**
+Published Dec 19, 2024
+
+https://www.anthropic.com/engineering/building-effective-agents
