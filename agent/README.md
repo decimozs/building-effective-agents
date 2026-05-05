@@ -1,5 +1,7 @@
 # Tool-Using Agent
 
+<img width="2401" height="1000" alt="image" src="https://github.com/user-attachments/assets/5a5c4ff8-f575-4dcf-800a-010f91a65004" />
+
 ## What This Pattern Is
 A tool-using agent lets the model choose and use tools as part of its workflow.
 
