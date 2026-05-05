@@ -1,5 +1,7 @@
 # Evaluator-Optimizer
 
+<img width="2401" height="1000" alt="image" src="https://github.com/user-attachments/assets/17c56371-2f4f-434f-8526-4e5ed8efbd2d" />
+
 ## What This Pattern Is
 This pattern loops between generating output and evaluating it.
 
