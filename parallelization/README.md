@@ -1,5 +1,7 @@
 # Parallelization
 
+<img width="2401" height="1000" alt="image" src="https://github.com/user-attachments/assets/549a4020-3a99-41f5-af10-5ecbbf861188" />
+
 ## What This Pattern Is
 Parallelization runs independent subtasks at the same time and combines the results later.
 
