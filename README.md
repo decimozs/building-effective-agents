@@ -14,6 +14,18 @@ This project covers patterns like:
 
 Each example shows a different way to structure agent behavior so the system becomes easier to control, debug, and improve.
 
+## Tech Stack
+
+This repository uses:
+- **Python** for the workflow code
+- **LangGraph** for graph-based agent orchestration
+- **LangChain** for model and tool integration
+- **Ollama** for local model execution
+- **LFM2.5 Thinking** as the main model used in the examples
+- **Langfuse** for tracing and run observability
+- **Pydantic** for structured outputs
+- **python-dotenv** for environment variable loading
+
 ## Core Concepts
 
 A few educational ideas come up repeatedly in agent design:
