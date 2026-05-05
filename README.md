@@ -14,6 +14,20 @@ This project covers patterns like:
 
 Each example shows a different way to structure agent behavior so the system becomes easier to control, debug, and improve.
 
+## Table of Contents
+
+- [Setup and Installation](#setup-and-installation)
+- [Tech Stack](#tech-stack)
+- [Makefile Targets](#makefile-targets)
+- [Core Concepts](#core-concepts)
+- [Reference](#reference)
+- [Prompt Chaining](prompt-chaining/README.md)
+- [Routing](routing/README.md)
+- [Parallelization](parallelization/README.md)
+- [Orchestrator-Workers](orchestrator-workers/README.md)
+- [Evaluator-Optimizer](evaluator-optimizer/README.md)
+- [Tool-Using Agent](agent/README.md)
+
 ## Setup and Installation
 
 ### 1. Clone the repository
