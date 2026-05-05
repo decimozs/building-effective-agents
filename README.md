@@ -37,7 +37,17 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync
 ```
 
-### 4. Run an example
+### 4. Configure environment variables
+
+Copy the example file and fill in the values you need:
+
+```bash
+copy .env.example .env
+```
+
+If you use Langfuse, set your public key, secret key, and host in `.env`.
+
+### 5. Run an example
 
 Use the Makefile targets:
 
@@ -104,3 +114,11 @@ Inspired by Anthropic's newsletter:
 Published Dec 19, 2024
 
 https://www.anthropic.com/engineering/building-effective-agents
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
+
+## Code of Conduct
+
+Please read and follow the [Code of Conduct](CODE_OF_CONDUCT.md) before contributing or participating in this project.
