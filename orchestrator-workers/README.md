@@ -1,5 +1,7 @@
 # Orchestrator-Workers
 
+<img width="2401" height="1000" alt="image" src="https://github.com/user-attachments/assets/edfd2962-5ebb-442f-90b6-7cf70811b4ce" />
+
 ## What This Pattern Is
 An orchestrator breaks a task into parts and delegates those parts to worker nodes.
 
