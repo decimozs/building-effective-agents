@@ -14,6 +14,48 @@ This project covers patterns like:
 
 Each example shows a different way to structure agent behavior so the system becomes easier to control, debug, and improve.
 
+## Setup and Installation
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/decimozs/building-effective-agents.git
+cd building-effective-agents
+```
+
+### 2. Install `uv`
+
+If you do not have `uv` yet, install it from Astral:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+### 3. Install dependencies
+
+```bash
+uv sync
+```
+
+### 4. Run an example
+
+Use the Makefile targets:
+
+```bash
+make run-prompt-chaining
+make run-routing
+make run-parallelization
+make run-orchestrator-workers
+make run-evaluator-optimizer
+make run-agent
+```
+
+If you prefer direct execution:
+
+```bash
+uv run prompt-chaining/workflow.py
+```
+
 ## Tech Stack
 
 This repository uses:
@@ -25,6 +67,20 @@ This repository uses:
 - **Langfuse** for tracing and run observability
 - **Pydantic** for structured outputs
 - **python-dotenv** for environment variable loading
+
+## Makefile Targets
+
+```bash
+make help
+```
+
+Available targets:
+- `make run-prompt-chaining`
+- `make run-routing`
+- `make run-parallelization`
+- `make run-orchestrator-workers`
+- `make run-evaluator-optimizer`
+- `make run-agent`
 
 ## Core Concepts
 
