@@ -1,5 +1,7 @@
 # Routing
 
+<img width="2401" height="1000" alt="image" src="https://github.com/user-attachments/assets/38bdc063-3f1d-4852-a81b-5146e73811da" />
+
 ## What This Pattern Is
 Routing classifies an input first, then sends it to the right specialist path.
 
