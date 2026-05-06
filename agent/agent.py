@@ -6,6 +6,7 @@ from langchain_core.messages import AnyMessage, HumanMessage, ToolMessage
 from langchain_ollama import ChatOllama
 from langfuse.langchain import CallbackHandler
 from langgraph.graph import END, START, StateGraph
+from langfuse import propagate_attributes
 
 from dotenv import load_dotenv
 
@@ -298,19 +299,23 @@ if __name__ == "__main__":
     ]:
         print(f"Running pipeline on a {label} article...")
 
-        for step in graph.stream(
-            {
-                "article": article,
-                "sentiment": "",
-                "summary": "",
-                "tags": [],
-                "escalation_note": "",
-                "tool_used": "",
-                "tool_result": "",
-                "llm_calls": 0,
-                "messages": [],
-            },
-            config={"callbacks": [langfuse_handler]},
+        with propagate_attributes(
+            metadata={"type": "agent-using-tools"},
+            tags=["agent"],
         ):
-            for node_name in step:
-                print(f"Node finished: {node_name}")
+            for step in graph.stream(
+                {
+                    "article": article,
+                    "sentiment": "",
+                    "summary": "",
+                    "tags": [],
+                    "escalation_note": "",
+                    "tool_used": "",
+                    "tool_result": "",
+                    "llm_calls": 0,
+                    "messages": [],
+                },
+                config={"callbacks": [langfuse_handler]},
+            ):
+                for node_name in step:
+                    print(f"Node finished: {node_name}")

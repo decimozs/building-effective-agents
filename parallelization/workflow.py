@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from langfuse.langchain import CallbackHandler
 from langchain_ollama import ChatOllama
 import operator
+from langfuse import propagate_attributes
 
 from langgraph.graph import END, START, StateGraph
 
@@ -96,19 +97,23 @@ workflow.add_edge("aggregate", END)
 graph = workflow.compile()
 
 
-for step in graph.stream(
-    {
-        "query": "Hello world",
-        "tagalog": "",
-        "french": "",
-        "japanese": "",
-        "results": [],
-    },
-    config={"callbacks": [langfuse_handler]},
+with propagate_attributes(
+    metadata={"type": "parallelization"},
+    tags=["workflow"],
 ):
-    for node_name, node_output in step.items():
-        print(f"\n{'=' * 40}")
-        print(f"Node: {node_name}")
-        print(f"{'=' * 40}")
-        for key, value in node_output.items():
-            print(f"\n[{key}]:\n{value}")
+    for step in graph.stream(
+        {
+            "query": "Hello world",
+            "tagalog": "",
+            "french": "",
+            "japanese": "",
+            "results": [],
+        },
+        config={"callbacks": [langfuse_handler]},
+    ):
+        for node_name, node_output in step.items():
+            print(f"\n{'=' * 40}")
+            print(f"Node: {node_name}")
+            print(f"{'=' * 40}")
+            for key, value in node_output.items():
+                print(f"\n[{key}]:\n{value}")

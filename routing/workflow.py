@@ -4,6 +4,7 @@ from langchain_ollama import ChatOllama
 from dotenv import load_dotenv
 from langgraph.graph import END, START, StateGraph
 from langfuse.langchain import CallbackHandler
+from langfuse import propagate_attributes
 
 load_dotenv()
 
@@ -136,13 +137,17 @@ graph = workflow.compile()
 
 langfuse_handler = CallbackHandler()
 
-for step in graph.stream(
-    {"query": "What is programming?", "intent": "", "answer": ""},
-    config={"callbacks": [langfuse_handler]},
+with propagate_attributes(
+    metadata={"type": "routing"},
+    tags=["workflow"],
 ):
-    for node_name, node_output in step.items():
-        print(f"\n{'=' * 40}")
-        print(f"Node: {node_name}")
-        print(f"{'=' * 40}")
-        for key, value in node_output.items():
-            print(f"\n[{key}]:\n{value}")
+    for step in graph.stream(
+        {"query": "What is programming?", "intent": "", "answer": ""},
+        config={"callbacks": [langfuse_handler]},
+    ):
+        for node_name, node_output in step.items():
+            print(f"\n{'=' * 40}")
+            print(f"Node: {node_name}")
+            print(f"{'=' * 40}")
+            for key, value in node_output.items():
+                print(f"\n[{key}]:\n{value}")

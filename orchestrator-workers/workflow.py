@@ -7,6 +7,7 @@ from langfuse.langchain import CallbackHandler
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import Send
 from pydantic import BaseModel, Field
+from langfuse import propagate_attributes
 
 load_dotenv()
 
@@ -107,18 +108,22 @@ graph = workflow.compile()
 
 langfuse_handler = CallbackHandler()
 
-for step in graph.stream(
-    {
-        "topic": "Global Warming",
-        "completed_sections": [],
-        "sections": [],
-        "final_report": "",
-    },
-    config={"callbacks": [langfuse_handler]},
+with propagate_attributes(
+    metadata={"type": "orchestrator-workers"},
+    tags=["workflow"],
 ):
-    for node_name, node_output in step.items():
-        print(f"\n{'=' * 40}")
-        print(f"Node: {node_name}")
-        print(f"{'=' * 40}")
-        for key, value in node_output.items():
-            print(f"\n[{key}]:\n{value}")
+    for step in graph.stream(
+        {
+            "topic": "Global Warming",
+            "completed_sections": [],
+            "sections": [],
+            "final_report": "",
+        },
+        config={"callbacks": [langfuse_handler]},
+    ):
+        for node_name, node_output in step.items():
+            print(f"\n{'=' * 40}")
+            print(f"Node: {node_name}")
+            print(f"{'=' * 40}")
+            for key, value in node_output.items():
+                print(f"\n[{key}]:\n{value}")

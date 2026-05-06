@@ -5,6 +5,7 @@ from langchain_ollama import ChatOllama
 from langfuse.langchain import CallbackHandler
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
+from langfuse import propagate_attributes
 
 load_dotenv()
 
@@ -89,13 +90,17 @@ graph = workflow.compile()
 
 langfuse_handler = CallbackHandler()
 
-for step in graph.stream(
-    {"topic": "Kalabaw", "joke": "", "feedback": "", "status": "", "iter": 0},
-    config={"callbacks": [langfuse_handler]},
+with propagate_attributes(
+    metadata={"type": "evaluator-optimizer"},
+    tags=["workflow"],
 ):
-    for node_name, node_output in step.items():
-        print(f"\n{'=' * 40}")
-        print(f"Node: {node_name}")
-        print(f"{'=' * 40}")
-        for key, value in node_output.items():
-            print(f"\n[{key}]:\n{value}")
+    for step in graph.stream(
+        {"topic": "Kalabaw", "joke": "", "feedback": "", "status": "", "iter": 0},
+        config={"callbacks": [langfuse_handler]},
+    ):
+        for node_name, node_output in step.items():
+            print(f"\n{'=' * 40}")
+            print(f"Node: {node_name}")
+            print(f"{'=' * 40}")
+            for key, value in node_output.items():
+                print(f"\n[{key}]:\n{value}")

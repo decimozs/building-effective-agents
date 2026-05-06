@@ -2,6 +2,7 @@ from typing import TypedDict
 from langchain_ollama import ChatOllama
 from langgraph.graph import END, START, StateGraph
 from langfuse.langchain import CallbackHandler
+from langfuse import propagate_attributes
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -100,19 +101,23 @@ graph = workflow.compile()
 
 langfuse_handler = CallbackHandler()
 
-for step in graph.stream(
-    {
-        "topic": "Lebron James",
-        "document_status": "",
-        "document_outline": "",
-        "final_document_outline": "",
-        "improve_document_outline": "",
-    },
-    config={"callbacks": [langfuse_handler]},
+with propagate_attributes(
+    metadata={"type": "prompt-chaining"},
+    tags=["workflow"],
 ):
-    for node_name, node_output in step.items():
-        print(f"\n{'=' * 40}")
-        print(f"Node: {node_name}")
-        print(f"{'=' * 40}")
-        for key, value in node_output.items():
-            print(f"\n[{key}]:\n{value}")
+    for step in graph.stream(
+        {
+            "topic": "Lebron James",
+            "document_status": "",
+            "document_outline": "",
+            "final_document_outline": "",
+            "improve_document_outline": "",
+        },
+        config={"callbacks": [langfuse_handler]},
+    ):
+        for node_name, node_output in step.items():
+            print(f"\n{'=' * 40}")
+            print(f"Node: {node_name}")
+            print(f"{'=' * 40}")
+            for key, value in node_output.items():
+                print(f"\n[{key}]:\n{value}")
