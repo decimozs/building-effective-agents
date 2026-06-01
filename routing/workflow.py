@@ -1,3 +1,18 @@
+# =============================================================================
+# routing/workflow.py
+#
+# Routing: Intent-Based Customer Support
+#
+# Classifies a user query into one of three categories — general question,
+# refund request, or technical support — then dispatches it to a specialist
+# handler. Each handler uses a narrow, role-specific system prompt.
+#
+# Pattern: Routing
+#   - Single classifier determines intent
+#   - Conditional edge dispatches to the correct specialist node
+#   - Specialist prompts stay isolated and focused
+# =============================================================================
+
 from typing import TypedDict
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama
@@ -10,6 +25,16 @@ load_dotenv()
 
 
 class State(TypedDict):
+    """Graph state for the routing workflow.
+
+    Carries the raw user query through intent classification and into
+    the selected specialist handler for a final answer.
+
+    Attributes:
+        query: Raw user input string.
+        intent: Classified intent label from the LLM.
+        answer: Final response produced by the specialist handler.
+    """
     query: str
     intent: str
     answer: str
@@ -21,8 +46,14 @@ llm = ChatOllama(model="lfm2.5-thinking", temperature=0)
 def general_questions(state: State) -> dict:
     """Handle open-ended customer questions.
 
-    One node, one job. Small specialist prompts are easier to control, debug,
-    and improve than one large prompt that tries to answer everything.
+    Small specialist prompts are easier to control, debug, and improve than
+    one large prompt that tries to answer everything.
+
+    Args:
+        state: Current graph state containing the user query.
+
+    Returns:
+        Dict with the answer string.
     """
     msg = llm.invoke(
         [
@@ -38,9 +69,14 @@ def general_questions(state: State) -> dict:
 def request_refund(state: State) -> dict:
     """Handle refund requests as a dedicated path.
 
-    Routing refunds into their own node keeps policy-heavy behavior isolated
-    from general support. That makes the agent simpler for beginners to reason
-    about and safer to extend later.
+    Keeps policy-heavy behavior isolated from general support so the agent
+    is simpler to reason about and safer to extend.
+
+    Args:
+        state: Current graph state containing the user query.
+
+    Returns:
+        Dict with the answer string.
     """
     msg = llm.invoke(
         [
@@ -56,8 +92,15 @@ def request_refund(state: State) -> dict:
 def technical_support(state: State) -> dict:
     """Handle technical support as a separate specialist path.
 
-    Troubleshooting needs different questions and steps than refunds or general
-    questions. Separate routing prevents one prompt from becoming too broad.
+    Troubleshooting needs different questions and steps than refunds or
+    general questions. Separate routing prevents one prompt from becoming
+    too broad.
+
+    Args:
+        state: Current graph state containing the user query.
+
+    Returns:
+        Dict with the answer string.
     """
     msg = llm.invoke(
         [
@@ -71,11 +114,17 @@ def technical_support(state: State) -> dict:
 
 
 def check_intent(state: State) -> dict:
-    """Classify the user request before answering.
+    """Classify the user query intent before answering.
 
     This is the routing step. The workflow decides what the user wants first,
     then sends the request to the right specialist node. That is the core
     Building Effective Agents pattern: route first, answer second.
+
+    Args:
+        state: Current graph state containing the user query.
+
+    Returns:
+        Dict with the intent string: technical_support, request_refund, or general_questions.
     """
     msg = llm.invoke(
         [
@@ -96,6 +145,12 @@ def route_intent(state: State) -> str:
     Explicit routing keeps the flow easy to inspect: classify, branch, answer.
     Beginners can test each path independently instead of debugging one large
     prompt that handles every support case.
+
+    Args:
+        state: Current graph state containing the intent label.
+
+    Returns:
+        Node name string: general_questions, request_refund, technical_support, or fail.
     """
     intent = (state.get("intent") or "").lower().strip()
 
@@ -109,9 +164,12 @@ def route_intent(state: State) -> str:
     return "general_questions"
 
 
+# ---------------------------------------------------------------------------
+# Graph Construction
+# ---------------------------------------------------------------------------
+
 workflow = StateGraph(State)
 
-# Explicit routing keeps the agent modular: one classifier, three specialist nodes, one clear path per intent.
 workflow.add_node("general_questions", general_questions)
 workflow.add_node("request_refund", request_refund)
 workflow.add_node("technical_support", technical_support)
@@ -128,7 +186,7 @@ workflow.add_conditional_edges(
         "fail": END,
     },
 )
-# End after one specialist response. Keep the workflow simple unless a real use case needs multi-turn refinement.
+# End after one specialist response. Keep the workflow simple.
 workflow.add_edge("general_questions", END)
 workflow.add_edge("request_refund", END)
 workflow.add_edge("technical_support", END)
@@ -136,6 +194,10 @@ workflow.add_edge("technical_support", END)
 graph = workflow.compile()
 
 langfuse_handler = CallbackHandler()
+
+# ---------------------------------------------------------------------------
+# Workflow Execution
+# ---------------------------------------------------------------------------
 
 with propagate_attributes(
     metadata={"type": "routing"},

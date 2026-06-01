@@ -1,3 +1,19 @@
+# =============================================================================
+# evaluator-optimizer/workflow.py
+#
+# Evaluator-Optimizer: Iterative Joke Generation
+#
+# Generates jokes on a given topic, evaluates them for funniness, and
+# iteratively refines based on feedback until the evaluator accepts the
+# result. The loop is bounded implicitly by the model's willingness to
+# improve on each pass.
+#
+# Pattern: Evaluator-Optimizer
+#   - Generator creates or refines a joke using prior feedback
+#   - Evaluator judges the joke and returns structured feedback
+#   - Loop continues until the evaluator signals acceptance
+# =============================================================================
+
 from typing import Literal, TypedDict
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -11,17 +27,39 @@ load_dotenv()
 
 
 class Feedback(BaseModel):
+    """Structured output from the evaluator.
+
+    Attributes:
+        status: Whether the joke passed the funniness check.
+        feedback: Free-text critique to guide the next generation.
+    """
     status: Literal["funny", "not_funny"] = Field(description="Feedback status")
     feedback: str = Field(description="Feedback for the joke")
 
 
 class State(TypedDict):
+    """Graph state for the evaluator-optimizer workflow.
+
+    Carries the topic, the current joke attempt, evaluator feedback,
+    acceptance status, and iteration counter.
+
+    Attributes:
+        topic: The joke subject provided by the user.
+        joke: Current joke text being evaluated.
+        feedback: Feedback from the evaluator to guide improvements.
+        status: Acceptance status: funny or not_funny.
+        iter: Number of generation-evaluation cycles completed.
+    """
     topic: str
     joke: str
     feedback: str
     status: str
     iter: int
 
+
+# ---------------------------------------------------------------------------
+# LLM Setup
+# ---------------------------------------------------------------------------
 
 llm = ChatOllama(model="lfm2.5-thinking", temperature=0)
 evaluator_llm = llm.with_structured_output(Feedback)
@@ -30,8 +68,14 @@ evaluator_llm = llm.with_structured_output(Feedback)
 def generator(state: State) -> dict:
     """Generate a joke, then refine it using prior feedback.
 
-    This is the optimizer side of the loop. The generator stays focused on the
-    current attempt, while the evaluator later provides the improvement signal.
+    The generator is the optimizer side of the loop. It stays focused on the
+    current attempt while the evaluator provides the improvement signal.
+
+    Args:
+        state: Current graph state with topic and optional prior feedback.
+
+    Returns:
+        Dict with the joke string and incremented iteration counter.
     """
     current_iter = state.get("iter", 0) + 1
     if state.get("feedback"):
@@ -46,8 +90,14 @@ def generator(state: State) -> dict:
 def evaluator(state: State) -> dict:
     """Judge the joke and produce feedback for the next iteration.
 
-    In an evaluator-optimizer loop, the evaluator acts like a critic. The loop
-    improves quality by repeatedly feeding critique back into generation.
+    The evaluator acts like a critic. The loop improves quality by repeatedly
+    feeding critique back into generation.
+
+    Args:
+        state: Current graph state containing the joke text.
+
+    Returns:
+        Dict with status (funny/not_funny) and feedback string.
     """
     evaluation = evaluator_llm.invoke(
         [
@@ -64,8 +114,14 @@ def evaluator(state: State) -> dict:
 def route(state: State):
     """Decide whether the joke is good enough to stop.
 
-    This keeps the loop explicit for beginners: generate, evaluate, then either
-    accept the result or send feedback back into another generation pass.
+    Keeps the loop explicit: generate, evaluate, then either accept the
+    result or send feedback back into another generation pass.
+
+    Args:
+        state: Current graph state containing the evaluator status.
+
+    Returns:
+        "accepted" if funny, "rejected + feedback" to continue the loop.
     """
     if state.get("status") == "funny":
         return "accepted"
@@ -73,9 +129,12 @@ def route(state: State):
         return "rejected + feedback"
 
 
+# ---------------------------------------------------------------------------
+# Graph Construction
+# ---------------------------------------------------------------------------
+
 workflow = StateGraph(State)
 
-# The loop alternates between generation and evaluation until the critic accepts.
 workflow.add_node("generator", generator)
 workflow.add_node("evaluator", evaluator)
 
@@ -84,11 +143,14 @@ workflow.add_edge("generator", "evaluator")
 workflow.add_conditional_edges(
     "evaluator", route, {"accepted": END, "rejected + feedback": "generator"}
 )
-# Stop only when the evaluator says the joke is funny.
 
 graph = workflow.compile()
 
 langfuse_handler = CallbackHandler()
+
+# ---------------------------------------------------------------------------
+# Workflow Execution
+# ---------------------------------------------------------------------------
 
 with propagate_attributes(
     metadata={"type": "evaluator-optimizer"},

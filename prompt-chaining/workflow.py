@@ -1,3 +1,18 @@
+# =============================================================================
+# prompt-chaining/workflow.py
+#
+# Prompt Chaining: Document Outline Generation
+#
+# Generates a document outline in sequential steps: first draft, quality check,
+# improvement pass, then final polish. Each step feeds its output into the next,
+# and a guardrail gate prevents low-quality drafts from advancing.
+#
+# Pattern: Prompt Chaining
+#   - Sequential steps each perform a narrow transformation
+#   - Guardrail step validates quality before continuing
+#   - Failed drafts terminate early instead of wasting further LLM calls
+# =============================================================================
+
 from typing import TypedDict
 from langchain_ollama import ChatOllama
 from langgraph.graph import END, START, StateGraph
@@ -9,6 +24,18 @@ load_dotenv()
 
 
 class State(TypedDict):
+    """Graph state for the prompt-chaining workflow.
+
+    Carries the topic and the outline through each sequential transformation
+    step: generate, check, improve, and polish.
+
+    Attributes:
+        topic: The subject for the document outline.
+        document_outline: First draft of the outline.
+        improve_document_outline: Improved version after review.
+        document_status: Validation result: passed or fail.
+        final_document_outline: Polished final version of the outline.
+    """
     topic: str
     document_outline: str
     improve_document_outline: str
@@ -16,14 +43,25 @@ class State(TypedDict):
     final_document_outline: str
 
 
+# ---------------------------------------------------------------------------
+# LLM Setup
+# ---------------------------------------------------------------------------
+
 llm = ChatOllama(model="lfm2.5-thinking", temperature=0)
 
 
 def generate_doucument_outline(state: State) -> dict:
     """Create the first draft of the outline from the topic.
 
-    Prompt chaining works by splitting one hard task into small steps. The
-    first node establishes a rough draft that later nodes can refine.
+    The first node in the chain establishes a rough draft that later nodes
+    refine. Splitting one hard task into small steps is the core idea of
+    prompt chaining.
+
+    Args:
+        state: Current graph state containing the topic string.
+
+    Returns:
+        Dict with the document_outline string.
     """
     msg = llm.invoke(f"Write document outline about {state.get('topic')}")
     return {"document_outline": msg.content}
@@ -32,8 +70,15 @@ def generate_doucument_outline(state: State) -> dict:
 def improve_doucument_outline(state: State) -> dict:
     """Improve the draft outline before the final pass.
 
-    A chained workflow lets each step focus on a narrow transformation instead
-    of forcing one prompt to generate the final answer in a single shot.
+    Each step in a chained workflow focuses on a narrow transformation
+    instead of forcing one prompt to generate the final answer in a single
+    shot.
+
+    Args:
+        state: Current graph state containing the initial document_outline.
+
+    Returns:
+        Dict with the improve_document_outline string.
     """
     msg = llm.invoke(f"Improve this document outline: {state.get('document_outline')}")
     return {"improve_document_outline": msg.content}
@@ -42,8 +87,14 @@ def improve_doucument_outline(state: State) -> dict:
 def final_document_outline(state: State) -> dict:
     """Polish the improved outline into the final version.
 
-    This last step keeps the output clean and consistent after earlier nodes
+    The last step keeps the output clean and consistent after earlier nodes
     have already done the heavy lifting.
+
+    Args:
+        state: Current graph state containing the improve_document_outline.
+
+    Returns:
+        Dict with the final_document_outline string.
     """
     msg = llm.invoke(
         f"Polish this improve document outline: {state.get('improve_document_outline')}"
@@ -54,8 +105,14 @@ def final_document_outline(state: State) -> dict:
 def check_document_outline(state: State) -> dict:
     """Validate the outline before allowing the workflow to continue.
 
-    In BEA terms, this is a guardrail step: check quality early, then branch
-    only if the draft meets the intended criterion.
+    A guardrail step: check quality early, then branch only if the draft
+    meets the intended criterion (science topic).
+
+    Args:
+        state: Current graph state containing the document_outline.
+
+    Returns:
+        Dict with document_status: "passed" or "fail".
     """
     msg = llm.invoke(
         f"Check this document outline: {state.get('document_outline')} "
@@ -69,8 +126,14 @@ def check_document_outline(state: State) -> dict:
 def route_document(state: State) -> str:
     """Route based on the validation result.
 
-    This makes the workflow explicit for beginners: generate, verify, then
-    continue only when the draft satisfies the rule.
+    Keeps the workflow explicit: generate, verify, then continue only when
+    the draft satisfies the rule.
+
+    Args:
+        state: Current graph state containing the document_status.
+
+    Returns:
+        "passed" to continue to improvement, "fail" to terminate.
     """
     document_status = state.get("document_status", "").lower()
     if "passed" in document_status:
@@ -78,9 +141,12 @@ def route_document(state: State) -> str:
     return "fail"
 
 
+# ---------------------------------------------------------------------------
+# Graph Construction
+# ---------------------------------------------------------------------------
+
 workflow = StateGraph(State)
 
-# Small sequential steps keep the chain easy to inspect and improve.
 workflow.add_node("generate_doucument_outline", generate_doucument_outline)
 workflow.add_node("improve_document_outline", improve_doucument_outline)
 workflow.add_node("final_document_outline", final_document_outline)
@@ -93,13 +159,16 @@ workflow.add_conditional_edges(
     route_document,
     {"passed": "improve_document_outline", "fail": END},
 )
-# Stop after the final polish. No extra loops needed for this example.
 workflow.add_edge("improve_document_outline", "final_document_outline")
 workflow.add_edge("final_document_outline", END)
 
 graph = workflow.compile()
 
 langfuse_handler = CallbackHandler()
+
+# ---------------------------------------------------------------------------
+# Workflow Execution
+# ---------------------------------------------------------------------------
 
 with propagate_attributes(
     metadata={"type": "prompt-chaining"},

@@ -1,3 +1,19 @@
+# =============================================================================
+# agent/agent.py
+#
+# Agent: Tool-Using Workflow
+#
+# Classifies news articles by sentiment, summarizes content, extracts tags,
+# escalates negative articles, and enriches reports using LLM-powered tools.
+# Built on LangGraph as a state machine with parallel branches and conditional
+# routing.
+#
+# Pattern: Agent (tool-using)
+#   - Model decides which tool to call based on the task
+#   - Tools are defined explicitly and registered by name
+#   - Tool execution is separated from model inference for debuggability
+# =============================================================================
+
 import operator
 from typing import Annotated, Literal, TypedDict
 
@@ -12,25 +28,57 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# ---------------------------------------------------------------------------
+# Tool Definitions
+# ---------------------------------------------------------------------------
+
 
 @tool
 def word_count(text: str) -> int:
-    """Count the number of words in the given text."""
+    """Count the number of words in the given text.
+
+    Tokenises the input by splitting on whitespace. Punctuation attached
+    to a word is counted as part of that word.
+
+    Args:
+        text: The input text to count words in.
+
+    Returns:
+        Total word count as an integer.
+    """
     return len(text.split())
 
 
 @tool
 def reading_time(text: str) -> float:
-    """Estimate reading time in minutes. Assumes 200 words per minute."""
+    """Estimate reading time in minutes.
+
+    Uses the standard 200 words-per-minute average reading speed.
+
+    Args:
+        text: The input text to estimate reading time for.
+
+    Returns:
+        Estimated reading time in minutes, rounded to 2 decimal places.
+    """
     words = len(text.split())
     return round(words / 200, 2)
 
 
 @tool
 def sentiment_score(text: str) -> float:
-    """
-    Return a polarity score for the text from -1.0 (very negative)
-    to +1.0 (very positive). Uses a simple keyword heuristic.
+    """Score the sentiment polarity of the input text.
+
+    Returns a value in [-1.0, 1.0] where -1.0 is very negative and +1.0
+    is very positive. Uses a simple keyword-matching heuristic against
+    predefined positive and negative word lists.
+
+    Args:
+        text: The input text to analyse for sentiment.
+
+    Returns:
+        Polarity score rounded to 2 decimal places. Returns 0.0 when no
+        sentiment keywords are found.
     """
     positive_words = {
         "breakthrough",
@@ -64,15 +112,34 @@ def sentiment_score(text: str) -> float:
 tools = [word_count, reading_time, sentiment_score]
 tools_by_name = {t.name: t for t in tools}
 
+# ---------------------------------------------------------------------------
+# LLM Setup
+# ---------------------------------------------------------------------------
 
 llm = ChatOllama(model="lfm2.5-thinking", temperature=0)
 llm_tools = llm.bind_tools(tools)
 
 
 class State(TypedDict):
+    """Graph state for the agent workflow.
+
+    Carries all data produced and consumed by nodes as the article flows
+    through classification, summarization, tagging, enrichment, and output.
+
+    Attributes:
+        article: Raw input article text.
+        sentiment: One of POSITIVE, NEGATIVE, or NEUTRAL.
+        summary: Two-sentence summary of the article.
+        tags: Up to 5 extracted keywords.
+        escalation_note: Internal note for human review (negative articles only).
+        tool_used: Name of the tool called during enrichment.
+        tool_result: Stringified result returned by the tool.
+        llm_calls: Running count of LLM invocations (accumulated via operator.add).
+        messages: Message history maintained by LangGraph for state tracking.
+    """
     article: str
 
-    sentiment: str  # "POSITIVE" | "NEGATIVE" | "NEUTRAL"
+    sentiment: str
 
     summary: str
 
@@ -80,8 +147,8 @@ class State(TypedDict):
 
     escalation_note: str
 
-    tool_used: str  # name of the tool that was called
-    tool_result: str  # stringified result from the tool
+    tool_used: str
+    tool_result: str
 
     llm_calls: Annotated[int, operator.add]
 
@@ -89,10 +156,17 @@ class State(TypedDict):
 
 
 def classify_node(state: State) -> dict:
-    """
-    Classify the article into one routing label.
+    """Classify the article sentiment into a routing label.
 
-    Small prompts keep the route reliable and the workflow easy to inspect.
+    Reads the raw article and returns one of POSITIVE, NEGATIVE, or NEUTRAL.
+    A fallback ensures the classifier always returns a valid label even when
+    the model produces unexpected output.
+
+    Args:
+        state: Current graph state containing the article text.
+
+    Returns:
+        Dict with sentiment label, llm_calls counter, and the response message.
     """
     prompt = f"""
 You are a sentiment classifier. Read the article below and reply with
@@ -112,11 +186,16 @@ Article:
 
 
 def summarize_node(state: State) -> dict:
-    """
-    Summarize the article as one independent branch.
+    """Summarise the article as one independent branch.
 
-    Parallel branches let the workflow do separate work at the same time, then
-    combine the results later.
+    Runs in parallel with tagging so the workflow does separate work
+    concurrently before aggregating results.
+
+    Args:
+        state: Current graph state containing the article text.
+
+    Returns:
+        Dict with summary string, llm_calls counter, and the response message.
     """
     prompt = f"""
 Summarise the following article in exactly 2 sentences.
@@ -130,10 +209,16 @@ Article:
 
 
 def tag_node(state: State) -> dict:
-    """
-    Extract tags as a second independent branch.
+    """Extract keywords from the article as a second independent branch.
 
-    Narrow prompts keep each subtask predictable and easy to debug.
+    Runs in parallel with summarization. A narrow prompt keeps extraction
+    predictable and easy to debug.
+
+    Args:
+        state: Current graph state containing the article text.
+
+    Returns:
+        Dict with a list of tag strings, llm_calls counter, and the response message.
     """
     prompt = f"""
 Extract up to 5 keywords from the article below.
@@ -150,10 +235,16 @@ Article:
 
 
 def escalate_node(state: State) -> dict:
-    """
-    Draft an escalation note for negative articles.
+    """Draft an escalation note for negative articles.
 
-    Branching keeps unnecessary work out of the positive path.
+    Only reached via the conditional edge from tag_node when sentiment is
+    NEGATIVE. Branching keeps unnecessary LLM calls out of the positive path.
+
+    Args:
+        state: Current graph state containing the summary text.
+
+    Returns:
+        Dict with escalation_note string, llm_calls counter, and the response message.
     """
     prompt = f"""
 You are an editorial assistant. The following article has been flagged as NEGATIVE.
@@ -171,11 +262,16 @@ Summary: {state["summary"]}
 
 
 def enrich_node(state: State) -> dict:
-    """
-    Ask the model which tool to use.
+    """Ask the model which tool to use on the article.
 
-    Tool selection stays separate from tool execution so the agent stays
-    modular and easier to reason about.
+    Tool selection is separated from tool execution so the agent stays modular
+    and each concern can be reasoned about independently.
+
+    Args:
+        state: Current graph state containing the article text.
+
+    Returns:
+        Dict with the model response message and llm_calls counter.
     """
     prompt = f"""
 You have access to tools that can enrich a news article report.
@@ -190,10 +286,17 @@ Article:
 
 
 def tool_node(state: State) -> dict:
-    """
-    Execute the tool the model requested.
+    """Execute the tool the model requested.
 
-    This keeps tool use explicit instead of hiding it inside the model call.
+    Reads tool_calls from the last message in state and dispatches each call
+    to the appropriate tool function. Keeps tool use explicit instead of hiding
+    it inside the model call.
+
+    Args:
+        state: Current graph state containing the message history.
+
+    Returns:
+        Dict with tool_used name, tool_result string, and tool response messages.
     """
     result_messages = []
     tool_used = ""
@@ -218,10 +321,16 @@ def tool_node(state: State) -> dict:
 
 
 def output_node(state: State) -> dict:
-    """
-    Print the final report in one place.
+    """Print the final report to stdout.
 
-    One output node keeps the end of the workflow obvious.
+    Aggregates all workflow outputs into a single printed summary. A single
+    output node keeps the end of the workflow obvious and easy to modify.
+
+    Args:
+        state: Completed graph state with all node outputs populated.
+
+    Returns:
+        Empty dict (terminal node, no state mutations).
     """
     print(f"Sentiment: {state.get('sentiment', 'N/A')}")
     print(f"Tags: {', '.join(state.get('tags', []))}")
@@ -239,16 +348,26 @@ def output_node(state: State) -> dict:
 
 
 def route_after_tag(state: State) -> Literal["escalate", "enrich"]:
-    """
-    Route the flow after tagging.
+    """Route the flow after tagging based on sentiment.
 
-    Explicit routing keeps the workflow readable for beginners: classify,
-    branch, then continue with the right path.
+    Negative articles are sent to escalation before enrichment; positive and
+    neutral articles skip escalation entirely. Explicit routing keeps the
+    workflow readable for beginners.
+
+    Args:
+        state: Current graph state containing the sentiment label.
+
+    Returns:
+        Literal "escalate" if sentiment is NEGATIVE, otherwise "enrich".
     """
     if state.get("sentiment") == "NEGATIVE":
         return "escalate"
     return "enrich"
 
+
+# ---------------------------------------------------------------------------
+# Graph Construction
+# ---------------------------------------------------------------------------
 
 workflow = StateGraph(State)
 
@@ -272,6 +391,9 @@ workflow.add_edge("output", END)
 
 graph = workflow.compile()
 
+# ---------------------------------------------------------------------------
+# Sample Articles
+# ---------------------------------------------------------------------------
 
 POSITIVE_ARTICLE = """
 Scientists at MIT announced a breakthrough in renewable energy storage today.
@@ -291,6 +413,10 @@ The company's stock dropped 18% following the announcement.
 
 
 langfuse_handler = CallbackHandler()
+
+# ---------------------------------------------------------------------------
+# Workflow Execution
+# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     for label, article in [
